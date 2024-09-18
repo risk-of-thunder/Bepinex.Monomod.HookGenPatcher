@@ -1,5 +1,4 @@
-﻿using BepInEx.Configuration;
-using Mono.Cecil;
+﻿using Mono.Cecil;
 using MonoMod;
 using MonoMod.RuntimeDetour.HookGen;
 using System;
@@ -13,17 +12,9 @@ namespace BepInEx.MonoMod.HookGenPatcher
     {
         internal static Logging.ManualLogSource Logger = Logging.Logger.CreateLogSource("HookGenPatcher");
 
-        private const string CONFIG_FILE_NAME = "HookGenPatcher.cfg";
-
-        private static readonly ConfigFile Config = new ConfigFile(Path.Combine(Paths.ConfigPath, CONFIG_FILE_NAME), true);
+        private static string AssemblyNamesToHookGenPatch = "RoR2.dll";
 
         private const char EntrySeparator = ',';
-
-        private static readonly ConfigEntry<string> AssemblyNamesToHookGenPatch = Config.Bind("General", "MMHOOKAssemblyNames",
-            "Assembly-CSharp.dll", $"Assembly names to make mmhooks for, separate entries with : {EntrySeparator} ");
-
-        private static readonly ConfigEntry<bool> preciseHash = Config.Bind<bool>("General", "Preciser filehashing", false, "Hash file using contents instead of size. Minor perfomance impact.");
-        private static bool skipHashing => !preciseHash.Value;
 
         public static IEnumerable<string> TargetDLLs { get; } = new string[] { };
 
@@ -33,7 +24,7 @@ namespace BepInEx.MonoMod.HookGenPatcher
 
         public static void Initialize()
         {
-            var assemblyNames = AssemblyNamesToHookGenPatch.Value.Split(EntrySeparator);
+            var assemblyNames = AssemblyNamesToHookGenPatch.Split(EntrySeparator);
 
             var mmhookFolder = Path.Combine(Paths.PluginPath, "MMHOOK");
 
@@ -74,12 +65,7 @@ namespace BepInEx.MonoMod.HookGenPatcher
                             bool mmSizeHash = oldMM.MainModule.GetType("BepHookGen.size" + size) != null;
                             if (mmSizeHash)
                             {
-                                if (skipHashing)
-                                {
-                                    Logger.LogInfo("Already ran for this version, reusing that file.");
-                                    continue;
-                                }
-                                hash = fileInfo.makeHash();
+                                hash = fileInfo.MakeHash();
                                 bool mmContentHash = oldMM.MainModule.GetType("BepHookGen.content" + hash) != null;
                                 if (mmContentHash)
                                 {
@@ -89,9 +75,9 @@ namespace BepInEx.MonoMod.HookGenPatcher
                             }
                         }
                     }
-                    catch (BadImageFormatException)
+                    catch (Exception e)
                     {
-                        Logger.LogWarning($"Failed to read {Path.GetFileName(pathOut)}, probably corrupted, remaking one.");
+                        Logger.LogWarning($"Failed to read {Path.GetFileName(pathOut)}, probably corrupted, remaking one. {e}");
                     }
                 }
 
@@ -124,10 +110,7 @@ namespace BepInEx.MonoMod.HookGenPatcher
                     {
                         gen.Generate();
                         mOut.Types.Add(new TypeDefinition("BepHookGen", "size" + size, TypeAttributes.Class | TypeAttributes.Public, mOut.TypeSystem.Object));
-                        if (!skipHashing)
-                        {
-                            mOut.Types.Add(new TypeDefinition("BepHookGen", "content" + (hash == 0 ? fileInfo.makeHash() : hash), TypeAttributes.Class | TypeAttributes.Public, mOut.TypeSystem.Object));
-                        }
+                        mOut.Types.Add(new TypeDefinition("BepHookGen", "content" + (hash == 0 ? fileInfo.MakeHash() : hash), TypeAttributes.Class | TypeAttributes.Public, mOut.TypeSystem.Object));
                         mOut.Write(pathOut);
                     }
 
@@ -140,7 +123,7 @@ namespace BepInEx.MonoMod.HookGenPatcher
         {
         }
 
-        private static long makeHash(this FileInfo fileInfo)
+        private static long MakeHash(this FileInfo fileInfo)
         {
             var fileStream = fileInfo.OpenRead();
             byte[] hashbuffer = null;
