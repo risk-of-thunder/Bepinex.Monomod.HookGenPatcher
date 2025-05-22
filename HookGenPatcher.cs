@@ -1,15 +1,18 @@
-﻿using Mono.Cecil;
-using MonoMod;
-using MonoMod.RuntimeDetour.HookGen;
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Security.Cryptography;
+using System.Text;
+using Mono.Cecil;
+using MonoMod;
+using MonoMod.RuntimeDetour.HookGen;
 
 namespace BepInEx.MonoMod.HookGenPatcher
 {
     public static class HookGenPatcher
     {
+        public const string Version = "1";
+
         internal static Logging.ManualLogSource Logger = Logging.Logger.CreateLogSource("HookGenPatcher");
 
         private static string AssemblyNamesToHookGenPatch = "RoR2.dll";
@@ -24,6 +27,8 @@ namespace BepInEx.MonoMod.HookGenPatcher
 
         public static void Initialize()
         {
+            Logger.LogInfo("HookGenPatcher v" + Version);
+
             var assemblyNames = AssemblyNamesToHookGenPatch.Split(EntrySeparator);
 
             var mmhookFolder = Path.Combine(Paths.PluginPath, "MMHOOK");
@@ -53,8 +58,7 @@ namespace BepInEx.MonoMod.HookGenPatcher
                 }
 
                 var fileInfo = new FileInfo(pathIn);
-                var size = fileInfo.Length;
-                long hash = 0;
+                string hash = null;
 
                 if (File.Exists(pathOut))
                 {
@@ -62,12 +66,12 @@ namespace BepInEx.MonoMod.HookGenPatcher
                     {
                         using (var oldMM = AssemblyDefinition.ReadAssembly(pathOut))
                         {
-                            bool mmSizeHash = oldMM.MainModule.GetType("BepHookGen.size" + size) != null;
-                            if (mmSizeHash)
+                            bool sameVersion = oldMM.MainModule.GetType("BepHookGen.version" + Version) != null;
+                            if (sameVersion)
                             {
                                 hash = fileInfo.MakeHash();
-                                bool mmContentHash = oldMM.MainModule.GetType("BepHookGen.content" + hash) != null;
-                                if (mmContentHash)
+                                bool sameHash = oldMM.MainModule.GetType("BepHookGen.hash" + hash) != null;
+                                if (sameHash)
                                 {
                                     Logger.LogInfo("Already ran for this version, reusing that file.");
                                     continue;
@@ -82,6 +86,8 @@ namespace BepInEx.MonoMod.HookGenPatcher
                 }
 
                 Environment.SetEnvironmentVariable("MONOMOD_HOOKGEN_PRIVATE", "1");
+                Environment.SetEnvironmentVariable("MONOMOD_HOOKGEN_NO_VISIBLE_CHECK", "1");
+
                 Environment.SetEnvironmentVariable("MONOMOD_DEPENDENCY_MISSING_THROW", "0");
 
                 using (MonoModder mm = new MonoModder()
@@ -109,8 +115,8 @@ namespace BepInEx.MonoMod.HookGenPatcher
                     using (ModuleDefinition mOut = gen.OutputModule)
                     {
                         gen.Generate();
-                        mOut.Types.Add(new TypeDefinition("BepHookGen", "size" + size, TypeAttributes.Class | TypeAttributes.Public, mOut.TypeSystem.Object));
-                        mOut.Types.Add(new TypeDefinition("BepHookGen", "content" + (hash == 0 ? fileInfo.MakeHash() : hash), TypeAttributes.Class | TypeAttributes.Public, mOut.TypeSystem.Object));
+                        mOut.Types.Add(new TypeDefinition("BepHookGen", "version" + Version, TypeAttributes.Class | TypeAttributes.Public, mOut.TypeSystem.Object));
+                        mOut.Types.Add(new TypeDefinition("BepHookGen", "hash" + (hash ?? fileInfo.MakeHash()), TypeAttributes.Class | TypeAttributes.Public, mOut.TypeSystem.Object));
                         mOut.Write(pathOut);
                     }
 
@@ -123,16 +129,17 @@ namespace BepInEx.MonoMod.HookGenPatcher
         {
         }
 
-        private static long MakeHash(this FileInfo fileInfo)
+        public static string MakeHash(this FileInfo fileInfo)
         {
-            var fileStream = fileInfo.OpenRead();
-            byte[] hashbuffer = null;
             using (MD5 md5 = new MD5CryptoServiceProvider())
+            using (FileStream stream = fileInfo.OpenRead())
             {
-                hashbuffer = md5.ComputeHash(fileStream);
+                byte[] hashBytes = md5.ComputeHash(stream);
+                StringBuilder sb = new StringBuilder();
+                foreach (byte b in hashBytes)
+                    sb.Append(b.ToString("X2"));
+                return sb.ToString();
             }
-            long hash = BitConverter.ToInt64(hashbuffer, 0);
-            return hash != 0 ? hash : 1;
         }
     }
 }
