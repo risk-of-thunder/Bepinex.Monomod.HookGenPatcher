@@ -11,7 +11,7 @@ namespace BepInEx.MonoMod.HookGenPatcher
 {
     public static class HookGenPatcher
     {
-        public const string Version = "1";
+        public const string Version = "2";
 
         internal static Logging.ManualLogSource Logger = Logging.Logger.CreateLogSource("HookGenPatcher");
 
@@ -87,6 +87,7 @@ namespace BepInEx.MonoMod.HookGenPatcher
 
                 Environment.SetEnvironmentVariable("MONOMOD_HOOKGEN_PRIVATE", "1");
                 Environment.SetEnvironmentVariable("MONOMOD_HOOKGEN_NO_VISIBLE_CHECK", "1");
+                Environment.SetEnvironmentVariable("MONOMOD_HOOKGEN_NO_VISIBLE_CHECK_BACKCOMPAT_SUFFIX", "1");
 
                 Environment.SetEnvironmentVariable("MONOMOD_DEPENDENCY_MISSING_THROW", "0");
 
