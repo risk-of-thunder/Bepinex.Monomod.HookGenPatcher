@@ -11,7 +11,7 @@ namespace BepInEx.MonoMod.HookGenPatcher
 {
     public static class HookGenPatcher
     {
-        public const string Version = "2";
+        public const string Version = "3";
 
         internal static Logging.ManualLogSource Logger = Logging.Logger.CreateLogSource("HookGenPatcher");
 
